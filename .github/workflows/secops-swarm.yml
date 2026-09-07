@@ -1,0 +1,35 @@
+name: Autonomous SecOps Agent Swarm
+
+on:
+  workflow_dispatch:
+    inputs:
+      cve_id:
+        description: 'CVE ID to scan and remediate'
+        required: true
+        default: 'CVE-2026-9999'
+      vulnerable_func:
+        description: 'Vulnerable function name'
+        required: false
+        default: 'vulnerable_eval'
+  push:
+    branches: [ "main" ]
+
+jobs:
+  secops-scan-and-remediate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Run Unit Test Suite
+        run: |
+          python -m unittest discover tests
+
+      - name: Run SecOps Agent Swarm
+        run: |
+          python main.py --repo . --cve "${{ github.event.inputs.cve_id || 'CVE-2026-9999' }}" --vulnerable-func "${{ github.event.inputs.vulnerable_func || 'vulnerable_eval' }}"
