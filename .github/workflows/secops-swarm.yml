@@ -1,4 +1,4 @@
-name: Autonomous SecOps Agent Swarm
+name: Autonomous SecOps Agent Swarm & Web Deployment
 
 on:
   workflow_dispatch:
@@ -13,6 +13,15 @@ on:
         default: 'vulnerable_eval'
   push:
     branches: [ "main" ]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   secops-scan-and-remediate:
@@ -33,3 +42,15 @@ jobs:
       - name: Run SecOps Agent Swarm
         run: |
           python main.py --repo . --cve "${{ github.event.inputs.cve_id || 'CVE-2026-9999' }}" --vulnerable-func "${{ github.event.inputs.vulnerable_func || 'vulnerable_eval' }}"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+
+      - name: Upload Artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
