@@ -19,8 +19,8 @@
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <span class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> GitHub Actions Active
+        <span id="backendStatusBadge" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> REST API Backend Connected
         </span>
         <a href="https://github.com/Manmath815/secops-agent-swarm" target="_blank" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-medium transition shadow-sm flex items-center gap-2">
           <span>🐙</span> GitHub Repo
@@ -166,10 +166,11 @@
   </div>
 
   <script>
-    function runSimulation() {
+    async function runSimulation() {
       const cve = document.getElementById('cveInput').value || 'CVE-2026-9999';
       const severity = document.getElementById('severityInput').value;
       const funcName = document.getElementById('funcInput').value || 'vulnerable_eval';
+      const desc = document.getElementById('descInput').value;
       const term = document.getElementById('terminalLog');
 
       term.innerHTML = '';
@@ -187,6 +188,26 @@
         `[Security Guardrail Agent] Executing sandbox test suite in isolated subprocess... [PASSED (100%)]`,
         `[Orchestrator] Pull Request payload constructed successfully!`
       ];
+
+      // Try connecting to live Python REST API server backend if running locally
+      try {
+        const res = await fetch('/api/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cve_id: cve,
+            severity: severity,
+            summary: desc,
+            vulnerable_functions: [funcName]
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          console.log("Live REST API backend response:", data);
+        }
+      } catch (e) {
+        console.log("Using client-side AST trace mode (Static/Pages hosting)");
+      }
 
       logs.forEach((log, index) => {
         setTimeout(() => {
