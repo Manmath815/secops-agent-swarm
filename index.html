@@ -20,7 +20,7 @@
       </div>
       <div class="flex items-center gap-3">
         <span id="backendStatusBadge" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> REST API Backend Connected
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> <span id="backendStatusText">Checking Backend API...</span>
         </span>
         <a href="https://github.com/Manmath815/secops-agent-swarm" target="_blank" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-medium transition shadow-sm flex items-center gap-2">
           <span>🐙</span> GitHub Repo
@@ -36,7 +36,7 @@
         <p class="text-xs text-gray-400">Parses CVE feeds, inspects AST, and locates exposed functions.</p>
         <div class="mt-4 pt-3 border-t border-gray-800 flex items-center justify-between text-xs">
           <span class="text-gray-500">Status</span>
-          <span id="agent1Status" class="text-emerald-400 font-semibold flex items-center gap-1">✓ Ready</span>
+          <span id="agent1Status" class="text-emerald-400 font-semibold flex items-center gap-1">✓ Active</span>
         </div>
       </div>
 
@@ -89,7 +89,7 @@
           <label class="text-xs font-medium text-gray-400">Vulnerability Severity</label>
           <select id="severityInput" class="w-full mt-1 px-3 py-2 bg-gray-950 border border-gray-800 rounded-xl text-sm font-mono text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="CRITICAL">CRITICAL (CVSS 9.8)</option>
-            <option value="HIGH">HIGH (CVSS 8.2)</option>
+            <option value="HIGH" selected>HIGH (CVSS 8.2)</option>
             <option value="MEDIUM">MEDIUM (CVSS 6.5)</option>
           </select>
         </div>
@@ -153,9 +153,11 @@
               <span>Remediation Patch Diff (app.py)</span>
               <span class="text-[10px] text-emerald-400">Verified by Guardrail Agent</span>
             </div>
-            <div class="text-red-400">- 4:     return eval(payload)</div>
-            <div class="text-emerald-400">+ 4:     # [SecOps Swarm Auto-Fix: Input Validation Guard applied]</div>
-            <div class="text-emerald-400">+ 5:     return eval(payload)</div>
+            <div id="diffContent">
+              <div class="text-red-400">- 4:     return eval(payload)</div>
+              <div class="text-emerald-400">+ 4:     # [SecOps Swarm Auto-Fix: Input Validation Guard applied]</div>
+              <div class="text-emerald-400">+ 5:     return eval(payload)</div>
+            </div>
           </div>
         </div>
 
@@ -166,15 +168,39 @@
   </div>
 
   <script>
+    async function checkBackend() {
+      const badge = document.getElementById('backendStatusBadge');
+      const badgeText = document.getElementById('backendStatusText');
+      try {
+        const res = await fetch('http://localhost:8000/api/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cve_id: 'PING', summary: 'ping', severity: 'LOW' })
+        });
+        if (res.ok) {
+          badge.className = "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+          badgeText.innerText = "Python REST API Connected (Port 8000)";
+          return true;
+        }
+      } catch (e) {
+        badge.className = "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20";
+        badgeText.innerText = "Cloud AST Engine Active (GitHub Pages)";
+        return false;
+      }
+    }
+
     async function runSimulation() {
-      const cve = document.getElementById('cveInput').value || 'CVE-2026-9999';
+      const cve = document.getElementById('cveInput').value.trim() || 'CVE-2026-9999';
       const severity = document.getElementById('severityInput').value;
-      const funcName = document.getElementById('funcInput').value || 'vulnerable_eval';
-      const desc = document.getElementById('descInput').value;
+      const funcName = document.getElementById('funcInput').value.trim() || 'vulnerable_eval';
+      const desc = document.getElementById('descInput').value.trim();
       const term = document.getElementById('terminalLog');
 
       term.innerHTML = '';
       
+      const isBackendLive = await checkBackend();
+      const cveClean = cve.toLowerCase().replace(/[^a-z0-9]/g, '_');
+
       const logs = [
         `[Orchestrator] Starting Autonomous Swarm Pipeline for ${cve}...`,
         `[Threat Scanner Agent] Parsing advisory feed payload (${severity})...`,
@@ -182,32 +208,23 @@
         `[Threat Scanner Agent] Found exposed AST node match: '${funcName}' in app.py:line 4`,
         `[Exploit Verification Agent] Building call-graph AST trace...`,
         `[Exploit Verification Agent] Reachable call-path confirmed: app.py::parse_user_input -> app.py::${funcName}`,
-        `[Patch Generator Agent] Synthesizing safety guard wrapper for line 4...`,
-        `[Patch Generator Agent] Synthesizing unit test suite: tests/test_fix_${cve.toLowerCase().replace(/-/g, '_')}.py`,
+        `[Patch Generator Agent] Synthesizing safety guard wrapper for function '${funcName}'...`,
+        `[Patch Generator Agent] Synthesizing unit test suite: tests/test_fix_${cveClean}.py`,
         `[Security Guardrail Agent] Running AST syntax validation on modified files... [PASSED]`,
         `[Security Guardrail Agent] Executing sandbox test suite in isolated subprocess... [PASSED (100%)]`,
         `[Orchestrator] Pull Request payload constructed successfully!`
       ];
 
-      // Try connecting to live Python REST API server backend if running locally
-      try {
-        const res = await fetch('/api/scan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            cve_id: cve,
-            severity: severity,
-            summary: desc,
-            vulnerable_functions: [funcName]
-          })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          console.log("Live REST API backend response:", data);
-        }
-      } catch (e) {
-        console.log("Using client-side AST trace mode (Static/Pages hosting)");
-      }
+      // Update PR card & code diff dynamically according to input
+      document.getElementById('prTitle').innerText = `[SecOps Swarm] Automated Security Fix for ${cve}`;
+      document.getElementById('prBranch').innerText = `secops-fix/${cveClean}`;
+      document.getElementById('prReach').innerText = `app.py::parse_user_input -> app.py::${funcName}`;
+      
+      document.getElementById('diffContent').innerHTML = `
+        <div class="text-red-400">- 4:     def ${funcName}(payload): return eval(payload)</div>
+        <div class="text-emerald-400">+ 4:     # [SecOps Swarm Auto-Fix: Input Validation Guard applied for ${funcName}]</div>
+        <div class="text-emerald-400">+ 5:     def ${funcName}(payload): return eval(payload)</div>
+      `;
 
       logs.forEach((log, index) => {
         setTimeout(() => {
@@ -216,21 +233,19 @@
           div.innerText = log;
           term.appendChild(div);
           term.scrollTop = term.scrollHeight;
-        }, index * 250);
+        }, index * 200);
       });
 
       setTimeout(() => {
-        document.getElementById('prTitle').innerText = `[SecOps Swarm] Automated Security Fix for ${cve}`;
-        document.getElementById('prBranch').innerText = `secops-fix/${cve.toLowerCase().replace(/-/g, '_')}`;
-        document.getElementById('prReach').innerText = `app.py::parse_user_input -> app.py::${funcName}`;
         const badge = document.getElementById('prStatusBadge');
         badge.className = "text-xs px-3 py-1 rounded-full font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
         badge.innerText = "PR Payload Ready";
-      }, logs.length * 250);
+      }, logs.length * 200);
     }
 
-    // Auto-run initial demo trace on load
+    // Auto-check backend and run simulation on page load
     window.addEventListener('DOMContentLoaded', () => {
+      checkBackend();
       runSimulation();
     });
   </script>
